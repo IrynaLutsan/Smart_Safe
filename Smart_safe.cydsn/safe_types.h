@@ -45,7 +45,7 @@ typedef enum
 {
     AUTH_PIN,  /**< Waiting for admin PIN entry.        */
     AUTH_RFID, /**< Waiting for master RFID scan.       */
-    AUTH_MENU, /**< Menu: 1=change PIN, 2=add tag, 0=exit */
+    AUTH_MENU, /**< Menu: 1=change PIN, 2=add tag, 3=delete tag, 0=exit */
 } AuthStep;
 
 /* ---- Shared FSM context ---- */

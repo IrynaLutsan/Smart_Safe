@@ -115,10 +115,11 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
         return;
     }
 
-    if (ev == EV_IMU_TRIP || ev == EV_MAG_TRIP || ev == EV_BARO_TRIP)
+    if (ev == EV_IMU_TRIP || ev == EV_MAG_TRIP ||
+        ev == EV_BARO_TRIP || ev == EV_LIGHT_TRIP)
     {
-        LOG_I(TAG, "tamper detected (ev=%d)", (int)ev);
-        TRANSITION(ctx, State2FA);
+        LOG_I(TAG, "tamper detected (ev=%d) -> ALARM", (int)ev);
+        TRANSITION(ctx, StateAlarm);
         return;
     }
 }
