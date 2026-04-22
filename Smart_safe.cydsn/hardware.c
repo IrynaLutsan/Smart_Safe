@@ -93,8 +93,6 @@ void hardware_init(void)
     lib_barometer_init();
     lib_rfid_init();
 
-    storage_init();
-
     /* Capture sensor baselines for tamper detection. */
     lib_acc_gyr_data_t      accel_data = lib_acc_gyr_get();
     lib_magnetometer_data_t mag_data   = lib_magnetometer_get();
