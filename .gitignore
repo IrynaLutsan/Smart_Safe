@@ -1,0 +1,32 @@
+# PSoC Creator — compiled output
+CortexM0/
+
+# PSoC Creator — auto-generated code (rebuilt every time)
+codegentemp/
+Generated_Source/
+
+# PSoC Creator — export folder
+Export/
+
+# PSoC Creator — build artifacts & reports
+*.cyfit
+*.cycdx
+*.rpt
+*.svd
+*_timing.html
+*.log
+
+# PSoC Creator — IDE state / range files (not project data)
+*.range
+
+# PSoC Creator — temp folders
+.tmp_noop/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+
+repomix-*
+TODO.md
