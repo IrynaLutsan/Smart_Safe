@@ -126,7 +126,7 @@ static void handle_menu_key(SafeContext* ctx, lib_mkb_key_t key)
             clear_input(ctx);
             lib_lcd1602_clear();
             lib_lcd1602_write_str(0u, 0u, "NEW PIN:");
-            lib_lcd1602_write_str(0u, 1u, "                ");
+            lib_lcd1602_write_str(0u, 1u, "then press *    ");
             return;
         }
         if (key == LIB_MKB_KEY_2)
@@ -135,7 +135,7 @@ static void handle_menu_key(SafeContext* ctx, lib_mkb_key_t key)
             lib_servo_set_target(SERVO_OPEN_DEG);
             lib_lcd1602_clear();
             lib_lcd1602_write_str(0u, 0u, "SCAN NEW TAG");
-            lib_lcd1602_write_str(0u, 1u, "                ");
+            lib_lcd1602_write_str(0u, 1u, "scan RFID now   ");
             return;
         }
         return;

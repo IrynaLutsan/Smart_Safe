@@ -13,11 +13,12 @@
 #define SERVO_MAX_ANGLE_DEG  180u
 
 /** Logical positions used by the FSM. */
-#define SERVO_CLOSED_DEG     0u   /**< RFID reader hidden.   */
-#define SERVO_OPEN_DEG       90u  /**< RFID reader exposed.  */
+#define SERVO_CLOSED_DEG      90u  /**< Neutral: lid closed, door closed. */
+#define SERVO_OPEN_DEG         0u  /**< Lid open: RFID reader exposed.    */
+#define SERVO_DOOR_OPEN_DEG  180u  /**< Door open.                        */
 
 /**
- * @brief Initialize the servo driver and snap to closed position (0 deg).
+ * @brief Initialize the servo driver and snap to closed position (SERVO_CLOSED_DEG).
  */
 void lib_servo_init(void);
 

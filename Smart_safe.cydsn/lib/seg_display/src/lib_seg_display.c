@@ -39,7 +39,8 @@ static const uint8_t LED_NUM[] = {
 	0xF8, //7
 	0x80, //8
 	0x90, //9
-	0xBF  //-
+	0xBF, //-
+	0xFF  // blank (SEG_DIGIT_BLANK) — all segments off
 };
 
 
@@ -103,6 +104,11 @@ void lib_seg_display_update_digit(uint8_t index, uint8_t value)
 
 	g_digits[index] = value;
 	LOG_D(TAG, "Digit[%u] updated to %u", index, value);
+}
+
+void lib_seg_display_clear(void)
+{
+	memset(g_digits, SEG_DIGIT_BLANK, LIB_SEG_DISPLAY_DIGITS_COUNT);
 }
 
 /**

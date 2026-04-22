@@ -58,7 +58,7 @@ static void on_enter(SafeContext* ctx)
     LED_GREEN_Write(0u);
     lib_lcd1602_clear();
     lib_lcd1602_write_str(0u, 0u, "=== LOCKED ===");
-    lib_lcd1602_write_str(0u, 1u, "                ");
+    lib_lcd1602_write_str(0u, 1u, "PIN:            ");
     LOG_I(TAG, "entered");
 }
 
@@ -88,7 +88,7 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
                 ctx->failed_attempts++;
                 lib_buzzer_beep_error();
                 clear_input(ctx);
-                show_mask(0u);
+                lib_lcd1602_write_str(0u, 1u, "WRONG PIN       ");
                 LOG_I(TAG, "wrong PIN, fails=%u", (unsigned)ctx->failed_attempts);
 
                 if (ctx->failed_attempts >= MAX_FAILS)

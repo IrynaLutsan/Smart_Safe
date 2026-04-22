@@ -23,7 +23,7 @@ int main(void)
     hardware_init();
     storage_init();
 
-    lib_servo_set_angle(0u);    /* ensure servo is at CLOSED position */
+    lib_servo_set_angle(SERVO_CLOSED_DEG);   /* 90° — neutral closed */
 
     SafeContext ctx = {
         .current_state      = &StateLocked,

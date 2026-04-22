@@ -26,7 +26,7 @@ static void on_enter(SafeContext* ctx)
 
     lib_lcd1602_clear();
     lib_lcd1602_write_str(0u, 0u, "SCAN RFID TAG");
-    lib_lcd1602_write_str(0u, 1u, "                ");
+    lib_lcd1602_write_str(0u, 1u, "Place on reader ");
 
     LOG_I(TAG, "entered — servo open, waiting for RFID");
 }

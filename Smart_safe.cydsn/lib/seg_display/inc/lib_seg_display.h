@@ -35,6 +35,17 @@ void lib_seg_display_update(const uint8_t *digits);
 void lib_seg_display_update_digit(uint8_t index, uint8_t value);
 
 /**
+ * @brief Digit code for a blank (all segments off). Pass as value to
+ *        lib_seg_display_update_digit() or fill a buffer with this value.
+ */
+#define SEG_DIGIT_BLANK  11u
+
+/**
+ * @brief Blank all 8 digits (all segments off).
+ */
+void lib_seg_display_clear(void);
+
+/**
  * @brief Timer ISR used for display multiplexing.
  */
 CY_ISR_PROTO(isr_7segment_interrupt_handler);

@@ -12,6 +12,7 @@
 #include "lib_mkb.h"
 #include "lib_rfid.h"
 #include "lib_lcd1602.h"
+#include "lib_seg_display.h"
 #include "lib_acc_gyr.h"
 #include "lib_magnetometer.h"
 #include "lib_barometer.h"
@@ -26,9 +27,9 @@
 *********************************************************************************/
 
 #define SERVO_TICK_MS        10u
-#define IMU_THRESHOLD_MG     200
-#define MAG_THRESHOLD_LSB    50
-#define BARO_THRESHOLD_PA    500u
+#define IMU_THRESHOLD_MG     1000
+#define MAG_THRESHOLD_LSB    3000
+#define BARO_THRESHOLD_PA    1500u
 
 
 /********************************************************************************
@@ -85,6 +86,8 @@ void hardware_init(void)
 
     lib_lcd1602_init();
     lib_lcd1602_clear();
+    lib_seg_display_init();
+    lib_seg_display_clear();
     lib_mkb_init();
     lib_servo_init();
     lib_buzzer_init();
@@ -219,6 +222,52 @@ void poll_hardware_and_push_events(SafeContext* ctx)
             e.type = EV_BARO_TRIP;
             e.data = NULL;
             event_push(e);
+        }
+    }
+
+    /* --- 7-segment countdown (STATE_OPEN: seconds remaining before auto-lock) --- */
+    {
+        static uint8_t  seg_was_open  = 0u;
+        static uint32_t seg_last_ms   = 0u;
+
+        if (ctx->current_state == &StateOpen && ctx->timer_target_ms != 0u)
+        {
+            seg_was_open = 1u;
+            if (now - seg_last_ms >= 1000u)
+            {
+                seg_last_ms = now;
+
+                uint32_t remaining_s = (ctx->timer_target_ms > now)
+                                       ? (ctx->timer_target_ms - now) / 1000u
+                                       : 0u;
+
+                uint8_t digits[LIB_SEG_DISPLAY_DIGITS_COUNT];
+                uint8_t i;
+                for (i = 0u; i < LIB_SEG_DISPLAY_DIGITS_COUNT; i++)
+                    digits[i] = SEG_DIGIT_BLANK;
+
+                if (remaining_s == 0u)
+                {
+                    digits[0] = 0u;
+                }
+                else
+                {
+                    uint8_t  pos = 0u;
+                    uint32_t n   = remaining_s;
+                    while (n > 0u && pos < LIB_SEG_DISPLAY_DIGITS_COUNT)
+                    {
+                        digits[pos++] = (uint8_t)(n % 10u);
+                        n /= 10u;
+                    }
+                }
+                lib_seg_display_update(digits);
+            }
+        }
+        else if (seg_was_open)
+        {
+            seg_was_open = 0u;
+            seg_last_ms  = 0u;
+            lib_seg_display_clear();
         }
     }
 

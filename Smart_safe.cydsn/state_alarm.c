@@ -38,7 +38,7 @@ static void on_enter(SafeContext* ctx)
 
     lib_lcd1602_clear();
     lib_lcd1602_write_str(0u, 0u, "!!! ALARM !!!");
-    lib_lcd1602_write_str(0u, 1u, "                ");
+    lib_lcd1602_write_str(0u, 1u, "Scan RFID tag   ");
 
     /* Continuous buzzer tone is driven by poll_hardware_and_push_events()
      * while current_state == &StateAlarm. */
