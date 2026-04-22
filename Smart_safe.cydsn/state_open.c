@@ -42,7 +42,6 @@ static void on_enter(SafeContext* ctx)
     ctx->timer_target_ms = g_open_entry_ms + OPEN_TIMEOUT_MS;
 
     RELAY_Write(1u);          /* solenoid fires — door unlocks */
-    MOSFET_Write(1u);         /* LED strip on                  */
     LED_GREEN_Write(1u);
     lib_servo_set_target(SERVO_DOOR_OPEN_DEG);   /* swing door open (180°) */
 
@@ -50,7 +49,7 @@ static void on_enter(SafeContext* ctx)
     lib_lcd1602_write_str(0u, 0u, "** OPEN **");
     lib_lcd1602_write_str(0u, 1u, "Close door->LOCK");
 
-    LOG_I(TAG, "entered — relay on, servo 180, MOSFET on");
+    LOG_I(TAG, "entered — relay on, servo 180");
 }
 
 static void on_exit(SafeContext* ctx)
@@ -58,9 +57,8 @@ static void on_exit(SafeContext* ctx)
     (void)ctx;
     lib_servo_set_target(SERVO_CLOSED_DEG);   /* return to 90° neutral */
     RELAY_Write(0u);
-    MOSFET_Write(0u);
     LED_GREEN_Write(0u);
-    LOG_I(TAG, "exit — relay off, servo closing, MOSFET off");
+    LOG_I(TAG, "exit — relay off, servo closing");
 }
 
 static void handle_event(SafeContext* ctx, EventType ev, void* data)

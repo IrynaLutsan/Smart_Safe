@@ -53,6 +53,9 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
         else
         {
             LOG_I(TAG, "RFID invalid — alarm");
+            lib_lcd1602_clear();
+            lib_lcd1602_write_str(0u, 0u, "INVALID TAG!");
+            lib_lcd1602_write_str(0u, 1u, "-> ALARM        ");
             lib_buzzer_beep_error();
             TRANSITION(ctx, StateAlarm);
         }

@@ -88,7 +88,8 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
                 ctx->failed_attempts++;
                 lib_buzzer_beep_error();
                 clear_input(ctx);
-                lib_lcd1602_write_str(0u, 1u, "WRONG PIN       ");
+                lib_lcd1602_write_str(0u, 0u, "WRONG PIN!");
+                lib_lcd1602_write_str(0u, 1u, "Try again...    ");
                 LOG_I(TAG, "wrong PIN, fails=%u", (unsigned)ctx->failed_attempts);
 
                 if (ctx->failed_attempts >= MAX_FAILS)
@@ -102,6 +103,10 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
         /* Digit key 0-9 */
         if ((uint8_t)key <= 9u && ctx->input_len < PIN_MAX_LEN)
         {
+            if (ctx->input_len == 0u)
+            {
+                lib_lcd1602_write_str(0u, 0u, "=== LOCKED ===");
+            }
             ctx->input_buffer[ctx->input_len] = (uint8_t)key;
             ctx->input_len++;
             show_mask(ctx->input_len);
