@@ -3,7 +3,7 @@
 *********************************************************************************/
 #include "lib_servo.h"
 #include "project.h"
-#include "PWM_SERVO.h"
+#include "PWM2_SERVO.h"
 
 #define LOG_LEVEL LOG_LEVEL_INFO
 #include "log_dbg.h"
