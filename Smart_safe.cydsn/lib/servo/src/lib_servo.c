@@ -12,88 +12,94 @@
 
 /********************************************************************************
  **********                        PRIVATE DEFINITIONS                ***********
- *********************************************************************************/
+*********************************************************************************/
 
-/** Servo pulse width limits in microseconds. */
-#define SERVO_MIN_PULSE_US 500u
-#define SERVO_MAX_PULSE_US 2400u
-#define SERVO_STEP_DELAY_MS 10u
+#define SERVO_MIN_PULSE_US  500u
+#define SERVO_MAX_PULSE_US  2400u
+#define SERVO_STEP_DELAY_MS 10u  /* used only by blocking lib_servo_set_angle() */
 
-static uint16_t g_servo_current_angle_deg = SERVO_MID_ANGLE_DEG + 1;
+static uint16_t g_current_deg = SERVO_CLOSED_DEG;
+static uint16_t g_target_deg  = SERVO_CLOSED_DEG;
 
 
 /********************************************************************************
  **********                        PRIVATE FUNCTIONS                  ***********
 *********************************************************************************/
 
-/**
- * @brief Convert a servo angle to a PWM compare value.
- * @param angle_deg Angle in degrees, clamped to 0..180.
- * @return PWM compare value for the generated PWM_SERVO component.
- */
 static uint16_t lib_servo_angle_to_compare(uint16_t angle_deg)
 {
-	if (angle_deg > 180u)
-	{
-		angle_deg = 180u;
-	}
+    if (angle_deg > 180u)
+    {
+        angle_deg = 180u;
+    }
 
-	uint32_t pulse_us = SERVO_MIN_PULSE_US +
-		((uint32_t)angle_deg * (SERVO_MAX_PULSE_US - SERVO_MIN_PULSE_US) + 90u) / 180u;
+    uint32_t pulse_us = SERVO_MIN_PULSE_US +
+        ((uint32_t)angle_deg * (SERVO_MAX_PULSE_US - SERVO_MIN_PULSE_US) + 90u) / 180u;
 
-	return (uint16_t)pulse_us;
+    return (uint16_t)pulse_us;
 }
+
 
 /********************************************************************************
  **********                         PUBLIC FUNCTIONS                  ***********
 *********************************************************************************/
 
-/**
- * @brief Initialize servo PWM and set default middle angle.
- *
- * Must be called once before lib_servo_set_angle().
- */
 void lib_servo_init(void)
 {
-    LOG_I(TAG, "Initializing servo motor...");
+    LOG_I(TAG, "Servo init -> closed (0 deg)");
     PWM2_SERVO_Init();
-    LOG_D(TAG, "PWM2_SERVO initialized");
     PWM2_SERVO_Enable();
-    LOG_D(TAG, "PWM2_SERVO enabled");
-	PWM2_SERVO_Start();
-	LOG_D(TAG, "PWM2_SERVO started");
-	lib_servo_set_angle(SERVO_MID_ANGLE_DEG);
-	LOG_I(TAG, "Servo initialization complete, set to 90 degrees");
+    PWM2_SERVO_Start();
+
+    g_current_deg = SERVO_CLOSED_DEG;
+    g_target_deg  = SERVO_CLOSED_DEG;
+    PWM2_SERVO_WriteCompare(lib_servo_angle_to_compare(SERVO_CLOSED_DEG));
 }
 
-/**
- * @brief Move servo to requested angle with smooth 1-degree steps.
- *
- * @param angle_deg Desired angle in degrees (0..180). Values above 180 are clamped.
- */
+void lib_servo_set_target(uint16_t angle_deg)
+{
+    if (angle_deg > SERVO_MAX_ANGLE_DEG)
+    {
+        angle_deg = SERVO_MAX_ANGLE_DEG;
+    }
+    g_target_deg = angle_deg;
+    LOG_D(TAG, "Target -> %d deg", angle_deg);
+}
+
+void lib_servo_tick(void)
+{
+    if (g_current_deg == g_target_deg)
+    {
+        return;
+    }
+
+    if (g_current_deg < g_target_deg)
+    {
+        g_current_deg++;
+    }
+    else
+    {
+        g_current_deg--;
+    }
+
+    PWM2_SERVO_WriteCompare(lib_servo_angle_to_compare(g_current_deg));
+}
+
+uint16_t lib_servo_get_angle(void)
+{
+    return g_current_deg;
+}
+
+/* Blocking wrapper — kept for compatibility. Not used in FSM context. */
 void lib_servo_set_angle(uint16_t angle_deg)
 {
-	if (angle_deg > 180u)
-	{
-		angle_deg = 180u;
-	}
-
-	while (g_servo_current_angle_deg != angle_deg)
-	{
-		if (g_servo_current_angle_deg < angle_deg)
-		{
-			g_servo_current_angle_deg++;
-		}
-		else
-		{
-			g_servo_current_angle_deg--;
-		}
-
-		PWM2_SERVO_WriteCompare(lib_servo_angle_to_compare(g_servo_current_angle_deg));
-		CyDelay(SERVO_STEP_DELAY_MS);
-	}
-
-	LOG_D(TAG, "Servo angle set to %d degrees", angle_deg);
+    lib_servo_set_target(angle_deg);
+    while (g_current_deg != g_target_deg)
+    {
+        lib_servo_tick();
+        CyDelay(SERVO_STEP_DELAY_MS);
+    }
+    LOG_D(TAG, "Blocking move complete: %d deg", angle_deg);
 }
 
 /* [] END OF FILE */
