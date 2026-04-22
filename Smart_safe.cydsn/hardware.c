@@ -16,10 +16,11 @@
 #include "lib_acc_gyr.h"
 #include "lib_magnetometer.h"
 #include "lib_barometer.h"
+#include "lib_adc.h"
 
+#define TAG "HW"
 #define LOG_LEVEL LOG_LEVEL_INFO
 #include "log_dbg.h"
-#define TAG "HW"
 
 
 /********************************************************************************
@@ -30,6 +31,16 @@
 #define IMU_THRESHOLD_MG     1000
 #define MAG_THRESHOLD_LSB    3000
 #define BARO_THRESHOLD_PA    1500u
+
+/* Light sensor (photoresistor/LDR on ADC_CH_EXT_2_5). */
+#define LIGHT_SAMPLE_MS      100u
+#define LIGHT_THRESHOLD      1500   /* tune on hardware — bright > ~1.2 V */
+#define LIGHT_DEBOUNCE_HITS  3u
+
+/* Baseline capture after sensor init. */
+#define BASELINE_WARMUP_SAMPLES  3u
+#define BASELINE_AVG_SAMPLES     8u
+#define BASELINE_SAMPLE_DELAY_MS 10u
 
 
 /********************************************************************************
@@ -68,6 +79,14 @@ static int32_t mag_mag(const lib_magnetometer_data_t* d)
     return x + y + z;
 }
 
+/* Tamper detectors are armed only when the safe should be physically idle.
+ * In OPEN the user is handling the door; in ALARM/2FA we're already in a
+ * bad-path sequence, so re-tripping adds noise without informational value. */
+static uint8_t tamper_armed(const SafeContext* ctx)
+{
+    return (ctx->current_state == &StateLocked) ? 1u : 0u;
+}
+
 
 /********************************************************************************
  **********                         PUBLIC FUNCTIONS                  ***********
@@ -75,14 +94,18 @@ static int32_t mag_mag(const lib_magnetometer_data_t* d)
 
 void hardware_init(void)
 {
-    CyGlobalIntEnable;
-
     dbg_log_init();
 
     CySysTickStart();
     CySysTickSetCallback(0u, systick_cb);
 
     I2C_Start();
+    SPIM_Start();
+
+    LED_RED_Write(0u);
+    LED_GREEN_Write(0u);
+    LED_BLUE_Write(0u);
+    RELAY_Write(0u);
 
     lib_lcd1602_init();
     lib_lcd1602_clear();
@@ -94,16 +117,42 @@ void hardware_init(void)
     lib_acc_gyr_init();
     lib_magnetometer_init();
     lib_barometer_init();
+    lib_adc_init();
     lib_rfid_init();
 
-    /* Capture sensor baselines for tamper detection. */
-    lib_acc_gyr_data_t      accel_data = lib_acc_gyr_get();
-    lib_magnetometer_data_t mag_data   = lib_magnetometer_get();
-    lib_barometer_data_t    baro_data  = lib_barometer_get();
+    /* Capture sensor baselines for tamper detection.
+     * Discard a few warm-up samples (sensors often output zeros right after
+     * power-up), then average a short window to smooth noise. */
+    {
+        uint8_t i;
+        for (i = 0u; i < BASELINE_WARMUP_SAMPLES; i++)
+        {
+            CyDelay(BASELINE_SAMPLE_DELAY_MS);
+            (void)lib_acc_gyr_get();
+            (void)lib_magnetometer_get();
+            (void)lib_barometer_get();
+        }
 
-    g_accel_base_mag = accel_mag(&accel_data);
-    g_mag_base_mag   = mag_mag(&mag_data);
-    g_baro_base_pa   = baro_data.pressure;
+        int32_t  acc_sum  = 0;
+        int32_t  mag_sum  = 0;
+        uint64_t baro_sum = 0u;
+        for (i = 0u; i < BASELINE_AVG_SAMPLES; i++)
+        {
+            CyDelay(BASELINE_SAMPLE_DELAY_MS);
+            lib_acc_gyr_data_t      a = lib_acc_gyr_get();
+            lib_magnetometer_data_t m = lib_magnetometer_get();
+            lib_barometer_data_t    b = lib_barometer_get();
+            acc_sum  += accel_mag(&a);
+            mag_sum  += mag_mag(&m);
+            baro_sum += b.pressure;
+        }
+        g_accel_base_mag = acc_sum  / (int32_t)BASELINE_AVG_SAMPLES;
+        g_mag_base_mag   = mag_sum  / (int32_t)BASELINE_AVG_SAMPLES;
+        g_baro_base_pa   = (uint32_t)(baro_sum / BASELINE_AVG_SAMPLES);
+    }
+
+     /* Enable interrupts last — all drivers are up and their callbacks installed. */
+    CyGlobalIntEnable;
 
     LOG_I(TAG, "hw init ok. accel_base=%ld mag_base=%ld baro_base=%lu",
           (long)g_accel_base_mag, (long)g_mag_base_mag, (unsigned long)g_baro_base_pa);
@@ -112,6 +161,12 @@ void hardware_init(void)
 uint32_t sys_tick_ms(void)
 {
     return g_ms;
+}
+
+uint8_t is_door_locked(void)
+{
+    /* REED_SW is active-low: 0 = magnet close (door shut), 1 = door open. */
+    return (REED_SW_Read() == 0u) ? 1u : 0u;
 }
 
 void poll_hardware_and_push_events(SafeContext* ctx)
@@ -156,16 +211,16 @@ void poll_hardware_and_push_events(SafeContext* ctx)
 
     /* --- Reed switch (active-low, debounced via last-state tracking) --- */
     {
-        static uint8_t reed_last = 1u;  /* 1 = open (not triggered), 0 = closed */
-        uint8_t reed_now = REED_SW_Read();
-        if (reed_now == 0u && reed_last != 0u)
+        static uint8_t reed_last_locked = 0u;  /* 1 = door closed, 0 = door open */
+        uint8_t reed_now_locked = is_door_locked();
+        if (reed_now_locked && !reed_last_locked)
         {
             Event e;
             e.type = EV_REED_CLOSED;
             e.data = NULL;
             event_push(e);
         }
-        reed_last = reed_now;
+        reed_last_locked = reed_now_locked;
     }
 
     /* --- Alarm continuous buzzer tone --- */
@@ -174,7 +229,7 @@ void poll_hardware_and_push_events(SafeContext* ctx)
         lib_buzzer_start(1000u);
     }
 
-    /* --- IMU tamper (only trip when locked — prevents false alarm when open) --- */
+    /* --- IMU tamper (only trip while physically idle and closed) --- */
     {
         lib_acc_gyr_data_t accel_data = lib_acc_gyr_get();
         if (accel_data.is_new.acc)
@@ -182,7 +237,7 @@ void poll_hardware_and_push_events(SafeContext* ctx)
             int32_t cur   = accel_mag(&accel_data);
             int32_t delta = cur - g_accel_base_mag;
             if (delta < 0) delta = -delta;
-            if (delta > IMU_THRESHOLD_MG && ctx->current_state == &StateLocked)
+            if (delta > IMU_THRESHOLD_MG && tamper_armed(ctx))
             {
                 Event e;
                 e.type = EV_IMU_TRIP;
@@ -200,7 +255,7 @@ void poll_hardware_and_push_events(SafeContext* ctx)
             int32_t cur   = mag_mag(&mag_data);
             int32_t delta = cur - g_mag_base_mag;
             if (delta < 0) delta = -delta;
-            if (delta > MAG_THRESHOLD_LSB)
+            if (delta > MAG_THRESHOLD_LSB && tamper_armed(ctx))
             {
                 Event e;
                 e.type = EV_MAG_TRIP;
@@ -216,7 +271,7 @@ void poll_hardware_and_push_events(SafeContext* ctx)
         uint32_t delta = (baro_data.pressure > g_baro_base_pa)
                          ? (baro_data.pressure - g_baro_base_pa)
                          : (g_baro_base_pa   - baro_data.pressure);
-        if (delta > BARO_THRESHOLD_PA)
+        if (delta > BARO_THRESHOLD_PA && tamper_armed(ctx))
         {
             Event e;
             e.type = EV_BARO_TRIP;
@@ -225,14 +280,50 @@ void poll_hardware_and_push_events(SafeContext* ctx)
         }
     }
 
-    /* --- 7-segment countdown (STATE_OPEN: seconds remaining before auto-lock) --- */
+    /* --- Light-inside-the-safe tamper (debounced photodiode sample) --- */
     {
-        static uint8_t  seg_was_open  = 0u;
-        static uint32_t seg_last_ms   = 0u;
-
-        if (ctx->current_state == &StateOpen && ctx->timer_target_ms != 0u)
+        static uint32_t light_last_ms = 0u;
+        static uint8_t  light_hits    = 0u;
+        if (now - light_last_ms >= LIGHT_SAMPLE_MS)
         {
-            seg_was_open = 1u;
+            light_last_ms = now;
+            int16_t v = lib_adc_get(ADC_CH_EXT_2_5);
+            if (v > LIGHT_THRESHOLD)
+            {
+                if (light_hits < LIGHT_DEBOUNCE_HITS)
+                {
+                    light_hits++;
+                }
+                if (light_hits >= LIGHT_DEBOUNCE_HITS && tamper_armed(ctx))
+                {
+                    Event e;
+                    e.type = EV_LIGHT_TRIP;
+                    e.data = NULL;
+                    event_push(e);
+                    light_hits = 0u; /* one event per sustained exposure */
+                }
+            }
+            else
+            {
+                light_hits = 0u;
+            }
+        }
+    }
+
+    /* --- 7-segment countdown (shows remaining seconds for OPEN auto-lock and
+     *     ALARM lockout). Refreshed once per second. --- */
+    {
+        static uint8_t  seg_was_showing = 0u;
+        static uint32_t seg_last_ms     = 0u;
+
+        uint8_t show_timer = (ctx->current_state == &StateOpen ||
+                              ctx->current_state == &StateAlarm ||
+                              ctx->current_state == &StateConfig) &&
+                             ctx->timer_target_ms != 0u;
+
+        if (show_timer)
+        {
+            seg_was_showing = 1u;
             if (now - seg_last_ms >= 1000u)
             {
                 seg_last_ms = now;
@@ -244,7 +335,9 @@ void poll_hardware_and_push_events(SafeContext* ctx)
                 uint8_t digits[LIB_SEG_DISPLAY_DIGITS_COUNT];
                 uint8_t i;
                 for (i = 0u; i < LIB_SEG_DISPLAY_DIGITS_COUNT; i++)
+                {
                     digits[i] = SEG_DIGIT_BLANK;
+                }
 
                 if (remaining_s == 0u)
                 {
@@ -263,10 +356,10 @@ void poll_hardware_and_push_events(SafeContext* ctx)
                 lib_seg_display_update(digits);
             }
         }
-        else if (seg_was_open)
+        else if (seg_was_showing)
         {
-            seg_was_open = 0u;
-            seg_last_ms  = 0u;
+            seg_was_showing = 0u;
+            seg_last_ms     = 0u;
             lib_seg_display_clear();
         }
     }
