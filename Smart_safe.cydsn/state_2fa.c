@@ -16,32 +16,25 @@
 
 
 /********************************************************************************
- **********                        PRIVATE DEFINITIONS                ***********
-*********************************************************************************/
-
-#define RFID_TIMEOUT_MS  10000u
-
-
-/********************************************************************************
  **********                     STATE IMPLEMENTATION                  ***********
 *********************************************************************************/
 
 static void on_enter(SafeContext* ctx)
 {
     lib_servo_set_target(SERVO_OPEN_DEG);   /* expose RFID reader */
-    ctx->timer_target_ms = sys_tick_ms() + RFID_TIMEOUT_MS;
+    ctx->timer_target_ms = 0u;              /* no timeout — waits indefinitely */
 
     lib_lcd1602_clear();
     lib_lcd1602_write_str(0u, 0u, "SCAN RFID TAG");
     lib_lcd1602_write_str(0u, 1u, "                ");
 
-    LOG_I(TAG, "entered — servo open, 10 s timeout");
+    LOG_I(TAG, "entered — servo open, waiting for RFID");
 }
 
 static void on_exit(SafeContext* ctx)
 {
     (void)ctx;
-    lib_servo_set_target(SERVO_CLOSED_DEG);  /* hide RFID reader */
+    lib_servo_set_target(SERVO_CLOSED_DEG);
     LOG_I(TAG, "exit — servo closing");
 }
 
@@ -63,13 +56,6 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
             lib_buzzer_beep_error();
             TRANSITION(ctx, StateAlarm);
         }
-        return;
-    }
-
-    if (ev == EV_TIMEOUT)
-    {
-        LOG_I(TAG, "timeout — alarm");
-        TRANSITION(ctx, StateAlarm);
     }
 }
 
