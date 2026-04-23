@@ -26,6 +26,12 @@ void hardware_init(void);
 uint32_t sys_tick_ms(void);
 
 /**
+ * @brief Return 1 if the safe's door is physically closed (reed switch engaged),
+ *        0 if open. Thin wrapper over the reed-switch GPIO.
+ */
+uint8_t is_door_locked(void);
+
+/**
  * @brief Poll all sensors and push any resulting events onto the event queue.
  *
  * Must be called from the main loop on every iteration.

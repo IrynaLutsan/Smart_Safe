@@ -59,9 +59,11 @@ static void handle_event(SafeContext* ctx, EventType ev, void* data)
 {
     (void)data;
 
-    if (ev == EV_KEY_PRESS)
+    /* Block both keypad and RFID input during the alarm — the user's spec
+     * grants RFID authority only in State2FA. Tamper events while already
+     * alarming are redundant and only pollute logs. */
+    if (ev != EV_TIMEOUT)
     {
-        /* Block all keypad input during alarm. */
         return;
     }
 

@@ -26,6 +26,7 @@ typedef enum
     EV_IMU_TRIP,     /**< Accelerometer tamper threshold exceeded. data = NULL */
     EV_MAG_TRIP,     /**< Magnetometer anomaly detected. data = NULL */
     EV_BARO_TRIP,    /**< Barometric pressure spike detected. data = NULL */
+    EV_LIGHT_TRIP,   /**< Photodiode detected light while safe is closed. data = NULL */
     EV_TIMEOUT,      /**< ctx->timer_target_ms elapsed. data = NULL */
     EV_RFID_SCANNED, /**< Valid RFID read. data = ctx->rfid_uid (uint8_t[5]) */
 } EventType;
@@ -44,21 +45,23 @@ typedef enum
 {
     AUTH_PIN,  /**< Waiting for admin PIN entry.        */
     AUTH_RFID, /**< Waiting for master RFID scan.       */
-    AUTH_MENU, /**< Menu: 1=change PIN, 2=add tag, 0=exit */
+    AUTH_MENU, /**< Menu: 1=change PIN, 2=add tag, 3=delete tag, 0=exit */
 } AuthStep;
 
 /* ---- Shared FSM context ---- */
 
 struct SafeContext
 {
-    struct State* current_state;      /**< Active state pointer.                  */
-    uint8_t       failed_attempts;    /**< Wrong PIN / RFID attempts in state.    */
-    uint8_t       backoff_multiplier; /**< Alarm timeout doubles each lockout.    */
-    AuthStep      auth_step;          /**< Sub-state used inside StateConfig.     */
-    uint8_t       input_buffer[16];   /**< Raw digit buffer for PIN entry.        */
-    uint8_t       input_len;          /**< Number of digits currently in buffer.  */
-    uint32_t      timer_target_ms;    /**< Absolute ms deadline; 0 = no timer.   */
-    uint8_t       rfid_uid[5];        /**< Scratch buffer for last scanned UID.  */
+    struct State* current_state;         /**< Active state pointer.                */
+    uint8_t       failed_attempts;       /**< Wrong PIN / RFID attempts in state.  */
+    uint8_t       backoff_multiplier;    /**< Alarm timeout doubles each lockout.  */
+    AuthStep      auth_step;             /**< Sub-state used inside StateConfig.   */
+    uint8_t       input_buffer[16];      /**< Raw digit buffer for PIN entry.      */
+    uint8_t       input_len;             /**< Number of digits currently in buffer */
+    uint32_t      timer_target_ms;       /**< Absolute ms deadline; 0 = no timer.  */
+    uint8_t       rfid_uid[5];           /**< Scratch buffer for last scanned UID. */
+    uint8_t       bad_scan_count;        /**< Bad RFID scans in current window.    */
+    uint32_t      bad_scan_window_start; /**< ms timestamp of first bad scan.      */
 };
 
 typedef struct SafeContext SafeContext;

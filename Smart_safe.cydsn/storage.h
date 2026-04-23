@@ -42,6 +42,16 @@ uint8_t storage_verify_rfid(const uint8_t* uid);
  */
 void storage_add_rfid(const uint8_t* uid);
 
+/**
+ * @brief Remove all stored RFID UIDs.
+ */
+void storage_clear_rfid(void);
+
+/**
+ * @brief Return the number of currently stored RFID UIDs (0..STORAGE_RFID_MAX_CNT).
+ */
+uint8_t storage_rfid_count(void);
+
 #endif /* STORAGE_H */
 
 /* [] END OF FILE */

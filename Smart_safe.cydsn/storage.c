@@ -32,28 +32,10 @@
 static const uint8_t DEFAULT_PIN[]     = {1u, 2u, 3u, 4u};
 static const uint8_t DEFAULT_PIN_LEN   = 4u;
 
+static const uint8_t DEFAULT_RFID_CNT   = 1u;
+static const uint8_t DEFAULT_RFID_UID[] = {0x00u, 0x00u, 0x00u, 0x00u, 0x00u}; 
 
-/********************************************************************************
- **********                        PRIVATE FUNCTIONS                  ***********
-*********************************************************************************/
 
-/* Read the full row into a local buffer, apply modifier, write back. */
-static void nvm_write(uint8_t offset, const uint8_t* data, uint8_t len)
-{
-    uint8_t buf[STORAGE_ROW_SIZE];
-    memcpy(buf, STORAGE_ROW_ADDR, STORAGE_ROW_SIZE);
-    memcpy(buf + offset, data, len);
-    cystatus status = CySysFlashWriteRow((uint32)STORAGE_FLASH_ROW, buf);
-    if (status != CYRET_SUCCESS)
-    {
-        LOG_E(TAG, "Flash write failed: %d", (int)status);
-    }
-}
-
-static void nvm_write_byte(uint8_t offset, uint8_t value)
-{
-    nvm_write(offset, &value, 1u);
-}
 
 
 /********************************************************************************
@@ -62,14 +44,15 @@ static void nvm_write_byte(uint8_t offset, uint8_t value)
 
 void storage_init(void)
 {
-    if (STORAGE_ROW_ADDR[NVM_PIN_LEN] == 0xFFu)
+    if (STORAGE_ROW_ADDR[NVM_PIN_LEN] == 0xFFu || STORAGE_ROW_ADDR[NVM_RFID_CNT] == 0xFFu)
     {
         /* First boot: blank flash — write defaults. */
         uint8_t buf[STORAGE_ROW_SIZE];
         memset(buf, 0u, STORAGE_ROW_SIZE);
         buf[NVM_PIN_LEN]  = DEFAULT_PIN_LEN;
         memcpy(buf + NVM_PIN_DATA, DEFAULT_PIN, DEFAULT_PIN_LEN);
-        buf[NVM_RFID_CNT] = 0u;
+        buf[NVM_RFID_CNT] = DEFAULT_RFID_CNT;
+        memcpy(buf + NVM_RFID_DATA, DEFAULT_RFID_UID, RFID_UID_LEN);
 
         cystatus status = CySysFlashWriteRow((uint32)STORAGE_FLASH_ROW, buf);
         if (status == CYRET_SUCCESS)
@@ -158,6 +141,37 @@ void storage_add_rfid(const uint8_t* uid)
     {
         LOG_E(TAG, "RFID add flash write failed: %d", (int)status);
     }
+}
+
+void storage_clear_rfid(void)
+{
+    uint8_t row_buf[STORAGE_ROW_SIZE];
+    memcpy(row_buf, STORAGE_ROW_ADDR, STORAGE_ROW_SIZE);
+    row_buf[NVM_RFID_CNT] = 0u;
+    /* Also wipe the stored UIDs to avoid leaking old data on partial re-fill. */
+    memset(row_buf + NVM_RFID_DATA, 0u,
+           (size_t)(STORAGE_RFID_MAX_CNT * RFID_UID_LEN));
+
+    cystatus status = CySysFlashWriteRow((uint32)STORAGE_FLASH_ROW, row_buf);
+    if (status == CYRET_SUCCESS)
+    {
+        LOG_I(TAG, "RFID list cleared");
+    }
+    else
+    {
+        LOG_E(TAG, "RFID clear flash write failed: %d", (int)status);
+    }
+}
+
+uint8_t storage_rfid_count(void)
+{
+    uint8_t count = STORAGE_ROW_ADDR[NVM_RFID_CNT];
+    if (count > STORAGE_RFID_MAX_CNT)
+    {
+        /* Blank flash (0xFF) or garbage — treat as empty. */
+        return 0u;
+    }
+    return count;
 }
 
 /* [] END OF FILE */
