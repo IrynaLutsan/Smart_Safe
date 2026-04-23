@@ -94,7 +94,11 @@ static uint8_t tamper_armed(const SafeContext* ctx)
 
 void hardware_init(void)
 {
+    CyGlobalIntEnable;
+
     dbg_log_init();
+    LOG_I(TAG, "log init ok");
+
 
     CySysTickStart();
     CySysTickSetCallback(0u, systick_cb);
@@ -152,7 +156,6 @@ void hardware_init(void)
     }
 
      /* Enable interrupts last — all drivers are up and their callbacks installed. */
-    CyGlobalIntEnable;
 
     LOG_I(TAG, "hw init ok. accel_base=%ld mag_base=%ld baro_base=%lu",
           (long)g_accel_base_mag, (long)g_mag_base_mag, (unsigned long)g_baro_base_pa);
@@ -197,15 +200,20 @@ void poll_hardware_and_push_events(SafeContext* ctx)
         }
     }
 
-    /* --- RFID --- */
+    /* --- RFID (100 ms poll interval — MFRC522 needs recovery time between scans) --- */
     {
-        ret_code_t rc = lib_rfid_scan(ctx->rfid_uid);
-        if (rc == RET_CODE_OK)
+        static uint32_t rfid_last_ms = 0u;
+        if (now - rfid_last_ms >= 100u)
         {
-            Event e;
-            e.type = EV_RFID_SCANNED;
-            e.data = ctx->rfid_uid;
-            event_push(e);
+            rfid_last_ms = now;
+            ret_code_t rc = lib_rfid_scan(ctx->rfid_uid);
+            if (rc == RET_CODE_OK)
+            {
+                Event e;
+                e.type = EV_RFID_SCANNED;
+                e.data = ctx->rfid_uid;
+                event_push(e);
+            }
         }
     }
 
